@@ -1,0 +1,6 @@
+# Local deployment/state artifacts
+.netlify
+digest.db
+site/
+deploy.zip
+config.json

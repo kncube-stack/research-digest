@@ -1,0 +1,12 @@
+[build]
+  command = "python3 scripts/build_static_site.py --config config.json --db digest.db --out site --refresh"
+  publish = "site"
+
+[build.environment]
+  PYTHON_VERSION = "3.11"
+
+[[redirects]]
+  from = "/api/digest"
+  to = "/digest.json"
+  status = 200
+  force = true

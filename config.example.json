@@ -1,0 +1,62 @@
+{
+  "TIME_WINDOW_DAYS": 7,
+  "TOPICS": [
+    "nutrition",
+    "evolutionary psychology",
+    "relationship science",
+    "personality science",
+    "psychology of men and boys",
+    "behaviour genetics",
+    "intelligence research"
+  ],
+  "JOURNAL_PRIORITIES": {
+    "tier1": [
+      "Nature",
+      "Science",
+      "Cell",
+      "The Lancet",
+      "New England Journal of Medicine",
+      "JAMA",
+      "BMJ",
+      "PNAS"
+    ],
+    "tier2": [
+      "Nature Medicine",
+      "Nature Metabolism",
+      "Nature Communications",
+      "Science Advances",
+      "Psychological Science",
+      "Perspectives on Psychological Science",
+      "Psychological Bulletin",
+      "Trends in Cognitive Sciences",
+      "Annual Review of Psychology",
+      "Annual Review of Nutrition"
+    ],
+    "tier3": []
+  },
+  "OPEN_ACCESS_PRIORITY": true,
+  "HUMAN_STUDIES_ONLY": true,
+  "SUMMARY_MIN_WORDS": 420,
+  "SUMMARY_MAX_WORDS": 780,
+  "MAX_PAPERS_PER_WEEK": 12,
+  "MIN_PAPERS_PER_TOPIC": 1,
+  "EXCLUDE": [
+    "preprints only",
+    "conference abstracts",
+    "non-peer reviewed"
+  ],
+  "OUTPUT_LANGUAGE": "English (UK)",
+  "AUDIENCE_LEVEL": "educated non-specialist",
+  "USER_CAN_ADD_TOPICS": true,
+  "UNPAYWALL_EMAIL": "",
+  "PUBMED_TOOL": "research-digest",
+  "PUBMED_EMAIL": "",
+  "RSS_FEEDS": [
+    {"name": "Nature", "url": "https://www.nature.com/nature.rss"},
+    {"name": "Nature Communications", "url": "https://www.nature.com/ncomms.rss"},
+    {"name": "PNAS", "url": "https://www.pnas.org/rss/current.xml"},
+    {"name": "BMJ", "url": "https://www.bmj.com/rss/current.xml"},
+    {"name": "JAMA Network Open", "url": "https://jamanetwork.com/rss/site_4/0.xml"},
+    {"name": "Psychological Science", "url": "https://journals.sagepub.com/action/showFeed?type=etoc&feed=rss&jc=pssa"}
+  ]
+}
