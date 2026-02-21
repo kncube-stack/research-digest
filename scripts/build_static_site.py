@@ -82,7 +82,7 @@ def build_site(config_path: str, db_path: str, out_dir: str, refresh: bool) -> N
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Build static Research Digest site for Netlify")
+    parser = argparse.ArgumentParser(description="Build static Research Digest site for GitHub Pages")
     parser.add_argument("--config", default="config.json", help="Config JSON path")
     parser.add_argument("--db", default="digest.db", help="SQLite DB path")
     parser.add_argument("--out", default="site", help="Output directory")

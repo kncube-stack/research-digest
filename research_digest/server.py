@@ -21,10 +21,15 @@ def _html_page(title: str, body: str) -> str:
   <meta charset=\"utf-8\" />
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
   <title>{html.escape(title)}</title>
+  <meta name=\"description\" content=\"A readable weekly digest of newly published research, tuned for clarity over jargon.\" />
   <link rel=\"stylesheet\" href=\"/static/styles.css\" />
+  <link rel=\"icon\" href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>\" />
 </head>
 <body>
 {body}
+<footer class=\"site-footer\">
+  Research Digest &middot; An automated weekly review of peer-reviewed science &middot; Not medical advice
+</footer>
 </body>
 </html>
 """
@@ -67,9 +72,9 @@ def _render_post_card(post: Dict[str, object]) -> str:
       <div class=\"tags\">{tags_html}</div>
       <h3><a href=\"/post/{slug}\">{post_title}</a></h3>
       <p class=\"paper-title\">{paper_title}</p>
-      <p class=\"meta\">{journal} | {pub_date} | {study_type} | {oa}</p>
+      <p class=\"meta\">{journal} &middot; {pub_date} &middot; {study_type} &middot; {oa}</p>
       <p class=\"dek\">{takeaway}</p>
-      <p class=\"actions\"><a href=\"/post/{slug}\">Read story</a> <span class=\"dot\">|</span> <a href=\"{link}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
+      <p class=\"actions\"><a href=\"/post/{slug}\">Read story &rarr;</a> <span class=\"dot\">&middot;</span> <a href=\"{link}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
     </article>
     """
 
@@ -84,6 +89,7 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
 
     featured_html = ""
     grid_html = ""
+    remainder_count = 0
 
     if posts:
         featured = posts[0]
@@ -98,14 +104,15 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
             <div class=\"tags\">{tags_html}</div>
             <h2><a href=\"/post/{slug}\">{_escape(featured.get('title'))}</a></h2>
             <p class=\"paper-title\">{_escape(featured.get('paper_title'))}</p>
-            <p class=\"meta\">{_escape(featured.get('journal'))} | {_escape(featured.get('publication_date'))} | {_escape(featured.get('study_type'))}</p>
+            <p class=\"meta\">{_escape(featured.get('journal'))} &middot; {_escape(featured.get('publication_date'))} &middot; {_escape(featured.get('study_type'))}</p>
             <p class=\"feature-summary\">{_escape(_word_excerpt(str(featured.get('summary') or ''), 60))}</p>
-            <p class=\"actions\"><a href=\"/post/{slug}\">Read full story</a> <span class=\"dot\">|</span> <a href=\"{_escape(featured.get('best_link'))}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
+            <p class=\"actions\"><a href=\"/post/{slug}\">Read full story &rarr;</a> <span class=\"dot\">&middot;</span> <a href=\"{_escape(featured.get('best_link'))}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
           </article>
         </section>
         """
 
         remainder = posts[1:]
+        remainder_count = len(remainder)
         if remainder:
             grid_html = "".join(_render_post_card(post) for post in remainder)
         else:
@@ -114,23 +121,34 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
         featured_html = """
         <section class=\"feature-wrap\">
           <article class=\"feature-card empty\">
-            <p class=\"feature-kicker\">Featured this week</p>
+            <p class=\"feature-kicker\">This week&#39;s issue</p>
             <h2>No qualifying papers this week</h2>
-            <p class=\"feature-summary\">The app searched configured sources but found no new peer-reviewed papers that met your current filters.</p>
+            <p class=\"feature-summary\">The digest searched configured sources but found no new peer-reviewed papers that met your current filters. Check back next week or try adjusting your topics.</p>
           </article>
         </section>
+        """
+
+    grid_section = ""
+    if grid_html:
+        grid_section = f"""
+        <div class=\"section-label\">More stories <span class=\"count\">{remainder_count}</span></div>
+        <section class=\"cards-grid\">{grid_html}</section>
         """
 
     body = f"""
     <header class=\"mast\">
       <div class=\"mast-inner\">
-        <p class=\"eyebrow\">Research Digest</p>
-        <h1>Your Weekly Science Magazine</h1>
+        <div class=\"nameplate\">
+          <div class=\"nameplate-icon\">RD</div>
+          <div class=\"nameplate-text\">Research Digest</div>
+        </div>
+        <p class=\"eyebrow\">Weekly Edition</p>
+        <h1>Your Science Magazine</h1>
         <p class=\"subtitle\">A readable digest of newly published papers across your chosen topics, tuned for clarity over jargon.</p>
         <div class=\"toolbar\">
           <span class=\"week\">{_escape(week_key)}</span>
           <a class=\"btn\" href=\"/refresh\">Refresh issue</a>
-          <a class=\"btn ghost\" href=\"/digest.json\">JSON API</a>
+          <a class=\"btn ghost\" href=\"/digest.json\">JSON feed</a>
         </div>
         <div class=\"stats\">
           <span>{stats['count']} stories</span>
@@ -143,7 +161,7 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
 
     <main class=\"container\">
       {featured_html}
-      {f'<section class="cards-grid">{grid_html}</section>' if grid_html else ''}
+      {grid_section}
     </main>
     """
     return _html_page("Research Digest", body)
@@ -172,20 +190,28 @@ def _render_post(post: Dict[str, object]) -> str:
     for key in ("publisher", "pdf", "pubmed", "pmc"):
         value = extra.get(key)
         if value:
+            label = key.upper() if key in ("pdf", "pmc") else key.capitalize()
             links.append(
-                f"<li><strong>{_escape(key)}:</strong> <a href=\"{_escape(value)}\" target=\"_blank\" rel=\"noopener\">{_escape(value)}</a></li>"
+                f"<li><strong>{_escape(label)}:</strong> <a href=\"{_escape(value)}\" target=\"_blank\" rel=\"noopener\">{_escape(value)}</a></li>"
             )
     links_html = "".join(links) if links else "<li>No additional links available.</li>"
+
+    # Format OA status nicely
+    oa_display = oa.replace("_", " ").title() if oa else "Unknown"
 
     body = f"""
     <header class=\"mast slim\">
       <div class=\"mast-inner\">
+        <div class=\"nameplate\">
+          <div class=\"nameplate-icon\">RD</div>
+          <div class=\"nameplate-text\">Research Digest</div>
+        </div>
         <p class=\"eyebrow\">Story</p>
         <h1>{title}</h1>
         <p class=\"subtitle\">{paper_title}</p>
         <div class=\"tags\">{tags_html}</div>
         <div class=\"toolbar\">
-          <a class=\"btn\" href=\"/\">Back to issue</a>
+          <a class=\"btn\" href=\"/\">&larr; Back to issue</a>
           <a class=\"btn ghost\" href=\"{best_link}\" target=\"_blank\" rel=\"noopener\">Open paper</a>
         </div>
       </div>
@@ -219,9 +245,9 @@ def _render_post(post: Dict[str, object]) -> str:
           <h2>Paper details</h2>
           <p><strong>Authors:</strong> {authors}</p>
           <p><strong>Journal:</strong> {journal}</p>
-          <p><strong>Date:</strong> {pub_date}</p>
+          <p><strong>Published:</strong> {pub_date}</p>
           <p><strong>Study type:</strong> {study_type}</p>
-          <p><strong>Access:</strong> {oa}</p>
+          <p><strong>Access:</strong> {oa_display}</p>
           <p><strong>DOI:</strong> {doi or 'N/A'}</p>
         </section>
 
@@ -352,8 +378,24 @@ def create_handler(config: AppConfig, store: DigestStore, pipeline: DigestPipeli
             self.wfile.write(encoded)
 
         def _not_found(self) -> None:
+            body = """
+            <header class="mast slim">
+              <div class="mast-inner">
+                <div class="nameplate">
+                  <div class="nameplate-icon">RD</div>
+                  <div class="nameplate-text">Research Digest</div>
+                </div>
+                <p class="eyebrow">Error</p>
+                <h1>Page not found</h1>
+                <p class="subtitle">The story you&#39;re looking for doesn&#39;t exist or may have moved.</p>
+                <div class="toolbar">
+                  <a class="btn" href="/">&larr; Back to issue</a>
+                </div>
+              </div>
+            </header>
+            """
             self._send_html(
-                _html_page("Not found", "<main class='container'><h1>404</h1><p>Page not found.</p></main>"),
+                _html_page("Not found — Research Digest", body),
                 status=HTTPStatus.NOT_FOUND,
             )
 
