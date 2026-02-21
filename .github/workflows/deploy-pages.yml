@@ -37,7 +37,7 @@ jobs:
 
       - name: Build Static Digest
         run: |
-          python3 scripts/build_static_site.py --config config.json --db digest.db --out site --refresh
+          python3 scripts/build_static_site.py --config config.json --db digest.db --out site --refresh --base-path /research-digest
 
       - name: Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3

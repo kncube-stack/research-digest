@@ -14,6 +14,20 @@ from .pipeline import DigestPipeline
 from .store import DigestStore, slugify
 
 
+_BASE_PATH = ""
+
+
+def set_base_path(path: str) -> None:
+    """Set the URL prefix for all internal links (e.g. '/research-digest')."""
+    global _BASE_PATH
+    _BASE_PATH = path.rstrip("/")
+
+
+def _bp(path: str) -> str:
+    """Prepend the base path to an internal URL."""
+    return f"{_BASE_PATH}{path}"
+
+
 def _html_page(title: str, body: str) -> str:
     return f"""<!doctype html>
 <html lang=\"en\">
@@ -22,7 +36,7 @@ def _html_page(title: str, body: str) -> str:
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
   <title>{html.escape(title)}</title>
   <meta name=\"description\" content=\"A readable weekly digest of newly published research, tuned for clarity over jargon.\" />
-  <link rel=\"stylesheet\" href=\"/static/styles.css\" />
+  <link rel=\"stylesheet\" href=\"{_bp('/static/styles.css')}\" />
   <link rel=\"icon\" href=\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>\" />
 </head>
 <body>
@@ -67,14 +81,15 @@ def _render_post_card(post: Dict[str, object]) -> str:
     tags = post.get("topic_tags") or []
     tags_html = "".join(f"<span class=\"tag\">{_escape(tag)}</span>" for tag in tags)
 
+    post_url = _bp(f"/post/{slug}")
     return f"""
     <article class=\"card\">
       <div class=\"tags\">{tags_html}</div>
-      <h3><a href=\"/post/{slug}\">{post_title}</a></h3>
+      <h3><a href=\"{post_url}\">{post_title}</a></h3>
       <p class=\"paper-title\">{paper_title}</p>
       <p class=\"meta\">{journal} &middot; {pub_date} &middot; {study_type} &middot; {oa}</p>
       <p class=\"dek\">{takeaway}</p>
-      <p class=\"actions\"><a href=\"/post/{slug}\">Read story &rarr;</a> <span class=\"dot\">&middot;</span> <a href=\"{link}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
+      <p class=\"actions\"><a href=\"{post_url}\">Read story &rarr;</a> <span class=\"dot\">&middot;</span> <a href=\"{link}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
     </article>
     """
 
@@ -94,6 +109,7 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
     if posts:
         featured = posts[0]
         slug = str(featured.get("slug") or slugify(str(featured.get("title") or featured.get("paper_title") or "post")))
+        feat_url = _bp(f"/post/{slug}")
         tags = featured.get("topic_tags") or []
         tags_html = "".join(f"<span class=\"tag\">{_escape(tag)}</span>" for tag in tags)
 
@@ -102,11 +118,11 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
           <article class=\"feature-card\">
             <p class=\"feature-kicker\">Featured this week</p>
             <div class=\"tags\">{tags_html}</div>
-            <h2><a href=\"/post/{slug}\">{_escape(featured.get('title'))}</a></h2>
+            <h2><a href=\"{feat_url}\">{_escape(featured.get('title'))}</a></h2>
             <p class=\"paper-title\">{_escape(featured.get('paper_title'))}</p>
             <p class=\"meta\">{_escape(featured.get('journal'))} &middot; {_escape(featured.get('publication_date'))} &middot; {_escape(featured.get('study_type'))}</p>
             <p class=\"feature-summary\">{_escape(_word_excerpt(str(featured.get('summary') or ''), 60))}</p>
-            <p class=\"actions\"><a href=\"/post/{slug}\">Read full story &rarr;</a> <span class=\"dot\">&middot;</span> <a href=\"{_escape(featured.get('best_link'))}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
+            <p class=\"actions\"><a href=\"{feat_url}\">Read full story &rarr;</a> <span class=\"dot\">&middot;</span> <a href=\"{_escape(featured.get('best_link'))}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
           </article>
         </section>
         """
@@ -147,8 +163,8 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
         <p class=\"subtitle\">A readable digest of newly published papers across your chosen topics, tuned for clarity over jargon.</p>
         <div class=\"toolbar\">
           <span class=\"week\">{_escape(week_key)}</span>
-          <a class=\"btn\" href=\"/refresh\">Refresh issue</a>
-          <a class=\"btn ghost\" href=\"/digest.json\">JSON feed</a>
+          <a class=\"btn\" href=\"{_bp('/refresh')}\">Refresh issue</a>
+          <a class=\"btn ghost\" href=\"{_bp('/digest.json')}\">JSON feed</a>
         </div>
         <div class=\"stats\">
           <span>{stats['count']} stories</span>
@@ -211,7 +227,7 @@ def _render_post(post: Dict[str, object]) -> str:
         <p class=\"subtitle\">{paper_title}</p>
         <div class=\"tags\">{tags_html}</div>
         <div class=\"toolbar\">
-          <a class=\"btn\" href=\"/\">&larr; Back to issue</a>
+          <a class=\"btn\" href=\"{_bp('/')}\">&larr; Back to issue</a>
           <a class=\"btn ghost\" href=\"{best_link}\" target=\"_blank\" rel=\"noopener\">Open paper</a>
         </div>
       </div>
@@ -389,7 +405,7 @@ def create_handler(config: AppConfig, store: DigestStore, pipeline: DigestPipeli
                 <h1>Page not found</h1>
                 <p class="subtitle">The story you&#39;re looking for doesn&#39;t exist or may have moved.</p>
                 <div class="toolbar">
-                  <a class="btn" href="/">&larr; Back to issue</a>
+                  <a class="btn" href="{_bp('/')}">&larr; Back to issue</a>
                 </div>
               </div>
             </header>

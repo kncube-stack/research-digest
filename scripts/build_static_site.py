@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from research_digest import DigestPipeline, DigestStore, load_config
-from research_digest.server import _render_home, _render_post
+from research_digest.server import _render_home, _render_post, set_base_path
 from research_digest.store import slugify
 
 
@@ -49,7 +49,8 @@ def _ensure_post_slugs(posts: List[Dict[str, object]]) -> List[Dict[str, object]
     return out
 
 
-def build_site(config_path: str, db_path: str, out_dir: str, refresh: bool) -> None:
+def build_site(config_path: str, db_path: str, out_dir: str, refresh: bool, base_path: str = "") -> None:
+    set_base_path(base_path)
     config = load_config(config_path)
     store = DigestStore(db_path)
     pipeline = DigestPipeline(config=config, store=store)
@@ -87,6 +88,7 @@ if __name__ == "__main__":
     parser.add_argument("--db", default="digest.db", help="SQLite DB path")
     parser.add_argument("--out", default="site", help="Output directory")
     parser.add_argument("--refresh", action="store_true", help="Force digest refresh before rendering")
+    parser.add_argument("--base-path", default="", help="URL prefix for GitHub Pages (e.g. /research-digest)")
     args = parser.parse_args()
 
-    build_site(config_path=args.config, db_path=args.db, out_dir=args.out, refresh=args.refresh)
+    build_site(config_path=args.config, db_path=args.db, out_dir=args.out, refresh=args.refresh, base_path=args.base_path)
