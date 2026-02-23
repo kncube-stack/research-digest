@@ -80,6 +80,41 @@ QUALITY_BOOST_PATTERNS = [
     (r"dose.response|dose response", 2.0),
 ]
 
+# Hard off-topic domain exclusion — these signals indicate the paper is NOT
+# about psychology or human nutrition regardless of loose keyword overlap.
+OFF_TOPIC_DOMAIN_HINTS = [
+    # Oncology / cancer biology
+    r"\bcancer\b", r"\btumou?r\b", r"\boncol", r"\bchemotherapy\b",
+    r"\bradiation therapy\b", r"\bmetasta", r"\bcarcinoma\b", r"\blymphoma\b",
+    r"\bleukemia\b", r"\bglioma\b",
+    # Surgery / wound / procedural
+    r"\bsurgical\b", r"\bsurgery\b", r"\banastomosis\b", r"\bwound heal",
+    r"\bpostoperative\b", r"\blaparoscop", r"\btransplant\b",
+    r"\bpedal access\b", r"\blimb salvage\b",
+    # Hepatology / liver disease (non-diet context)
+    r"\bhepatic encephalopathy\b", r"\bcirrhosis\b", r"\bTACE\b",
+    r"\bchemoembolization\b", r"\bhepatomaB?\b", r"\bhepatocellular carcinoma\b",
+    # Neurology (non-cognitive ability context)
+    r"\bparkinson", r"\bepilepsy\b", r"\bstroke\b", r"\bdementia\b",
+    r"\bneurodegenerative\b", r"\bmotor progression\b", r"\bmotor symptoms\b",
+    # Glycomics / proteomics / biomarker-only
+    r"\bglycomi", r"\bproteomi", r"\bN-glycan\b", r"\bepigenetic clock\b",
+    # Cardiology procedures
+    r"\baortic stenosis\b", r"\bvalvular\b", r"\bechocardiograph",
+    r"\bcardiac amyloidosis\b", r"\bheart failure device\b",
+    # Veterinary / animal
+    r"\bveterinary\b", r"\bcanine\b", r"\bovine\b", r"\bporcine\b",
+]
+
+# If any off-topic signal matches AND no strong on-topic signal is present, exclude.
+ON_TOPIC_RESCUE_PATTERNS = [
+    r"\bdiet\b", r"\bnutrition\b", r"\bpersonality\b", r"\bintelligence\b",
+    r"\bcognitive abilit", r"\brelationship\b", r"\bmate choice\b",
+    r"\bsex differences\b", r"\bevolutionary psychology\b", r"\bsocial cognition\b",
+    r"\bweight loss\b", r"\bobesity treatment\b", r"\bcardiometabolic\b",
+    r"\bdietary pattern\b", r"\bprospective cohort diet\b",
+]
+
 TIER1_HINTS = [
     "nature",
     "science",
@@ -96,6 +131,17 @@ TIER1_HINTS = [
     "journal of experimental psychology",
     "evolution and human behavior",
 ]
+
+
+def _is_off_topic(paper: CandidatePaper) -> bool:
+    """Return True if the paper is clearly in an excluded domain."""
+    text = f"{paper.title} {paper.abstract}".lower()
+    has_off_topic = any(re.search(p, text) for p in OFF_TOPIC_DOMAIN_HINTS)
+    if not has_off_topic:
+        return False
+    # If a strong on-topic signal is also present, keep the paper.
+    has_rescue = any(re.search(p, text) for p in ON_TOPIC_RESCUE_PATTERNS)
+    return not has_rescue
 
 
 def infer_study_type(paper: CandidatePaper) -> str:
@@ -180,6 +226,28 @@ def score_candidate(paper: CandidatePaper, config: AppConfig, now: date) -> Tupl
     topic_scores = match_topics(paper, config)
 
     if not topic_scores:
+        return 0.0, {
+            "journal": 0.0,
+            "open_access": 0.0,
+            "topic_match": 0.0,
+            "study_type": 0.0,
+            "novelty": 0.0,
+            "quality_boost": 0.0,
+        }
+
+    # Hard off-topic domain exclusion (oncology, surgery, neurology, etc.)
+    if _is_off_topic(paper):
+        return 0.0, {
+            "journal": 0.0,
+            "open_access": 0.0,
+            "topic_match": 0.0,
+            "study_type": 0.0,
+            "novelty": 0.0,
+            "quality_boost": 0.0,
+        }
+
+    # Require a minimum topic match score to avoid loose-keyword false positives.
+    if max(topic_scores.values()) < 2.0:
         return 0.0, {
             "journal": 0.0,
             "open_access": 0.0,

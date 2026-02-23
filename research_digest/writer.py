@@ -158,7 +158,7 @@ def _tags_for_paper(paper: CandidatePaper) -> List[str]:
 # ---------------------------------------------------------------------------
 
 def _build_headline(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
-    """Create a 6–14 word magazine headline that does not copy >=4 consecutive words from the title."""
+    """Create a 6–8 word magazine headline drawn from the key finding."""
     base = ""
     if picked["result"]:
         base = picked["result"][0]
@@ -168,17 +168,28 @@ def _build_headline(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
         base = picked["all"][0]
 
     base = re.sub(r"[.!?]+$", "", base).strip()
+    # Strip leading boilerplate phrases
+    base = re.sub(
+        r"^(results (indicate|show|suggest)|findings (indicate|show|suggest)|"
+        r"we (found|observed|show|report)|this study (found|shows|demonstrates)|"
+        r"the (study|analysis|results?) (found|showed|demonstrated|indicated))\s+",
+        "", base, flags=re.IGNORECASE,
+    ).strip()
+
     words = base.split()
 
+    # Target 6–8 words
     if len(words) < 6:
-        headline = f"New evidence on {paper.title[:60].rstrip()}"
-    elif len(words) > 14:
-        headline = " ".join(words[:14])
+        # Fall back: use a trimmed version of the paper title
+        title_words = paper.title.split()
+        headline = " ".join(title_words[:8]) if len(title_words) >= 6 else paper.title
     else:
-        headline = base
+        headline = " ".join(words[:8])
 
     headline = headline[0].upper() + headline[1:] if headline else paper.title
-    return headline
+    # Ensure it doesn't end mid-preposition or mid-article awkwardly
+    headline = re.sub(r"\s+(a|an|the|in|of|for|and|or|to|with|on|at|by)$", "", headline, flags=re.IGNORECASE)
+    return headline.strip()
 
 
 def _build_deck(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:

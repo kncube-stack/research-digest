@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -69,26 +70,27 @@ def _render_bullet_block(text: str) -> str:
 
 
 def _render_post_card(post: Dict[str, object]) -> str:
-    post_title = _escape(post.get("title"))
+    headline = _escape(post.get("headline") or post.get("title") or post.get("paper_title") or "")
     paper_title = _escape(post.get("paper_title"))
-    takeaway = _escape(post.get("one_sentence_takeaway"))
+    deck = _escape(post.get("deck") or post.get("one_sentence_takeaway") or "")
     journal = _escape(post.get("journal"))
     pub_date = _escape(post.get("publication_date"))
     study_type = _escape(post.get("study_type"))
     oa = _escape(post.get("open_access_status"))
-    link = _escape(post.get("best_link"))
-    slug = str(post.get("slug") or slugify(str(post.get("title") or post.get("paper_title") or "post")))
-    tags = post.get("topic_tags") or []
+    doi = post.get("doi") or ""
+    link = _escape(f"https://doi.org/{doi}" if doi else (post.get("best_link") or ""))
+    slug = str(post.get("slug") or slugify(str(post.get("headline") or post.get("paper_title") or "post")))
+    tags = post.get("tags") or post.get("topic_tags") or []
     tags_html = "".join(f"<span class=\"tag\">{_escape(tag)}</span>" for tag in tags)
 
     post_url = _bp(f"/post/{slug}")
     return f"""
     <article class=\"card\">
       <div class=\"tags\">{tags_html}</div>
-      <h3><a href=\"{post_url}\">{post_title}</a></h3>
+      <h3><a href=\"{post_url}\">{headline}</a></h3>
       <p class=\"paper-title\">{paper_title}</p>
       <p class=\"meta\">{journal} &middot; {pub_date} &middot; {study_type} &middot; {oa}</p>
-      <p class=\"dek\">{takeaway}</p>
+      <p class=\"dek\">{deck}</p>
       <p class=\"actions\"><a href=\"{post_url}\">Read story &rarr;</a> <span class=\"dot\">&middot;</span> <a href=\"{link}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
     </article>
     """
@@ -108,21 +110,24 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
 
     if posts:
         featured = posts[0]
-        slug = str(featured.get("slug") or slugify(str(featured.get("title") or featured.get("paper_title") or "post")))
+        slug = str(featured.get("slug") or slugify(str(featured.get("headline") or featured.get("paper_title") or "post")))
         feat_url = _bp(f"/post/{slug}")
-        tags = featured.get("topic_tags") or []
+        tags = featured.get("tags") or featured.get("topic_tags") or []
         tags_html = "".join(f"<span class=\"tag\">{_escape(tag)}</span>" for tag in tags)
+        feat_doi = featured.get("doi") or ""
+        feat_link = f"https://doi.org/{feat_doi}" if feat_doi else (featured.get("best_link") or "")
+        feat_deck = _word_excerpt(str(featured.get("deck") or featured.get("summary") or ""), 60)
 
         featured_html = f"""
         <section class=\"feature-wrap\">
           <article class=\"feature-card\">
             <p class=\"feature-kicker\">Featured this week</p>
             <div class=\"tags\">{tags_html}</div>
-            <h2><a href=\"{feat_url}\">{_escape(featured.get('title'))}</a></h2>
+            <h2><a href=\"{feat_url}\">{_escape(featured.get('headline') or featured.get('title') or '')}</a></h2>
             <p class=\"paper-title\">{_escape(featured.get('paper_title'))}</p>
             <p class=\"meta\">{_escape(featured.get('journal'))} &middot; {_escape(featured.get('publication_date'))} &middot; {_escape(featured.get('study_type'))}</p>
-            <p class=\"feature-summary\">{_escape(_word_excerpt(str(featured.get('summary') or ''), 60))}</p>
-            <p class=\"actions\"><a href=\"{feat_url}\">Read full story &rarr;</a> <span class=\"dot\">&middot;</span> <a href=\"{_escape(featured.get('best_link'))}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
+            <p class=\"feature-summary\">{_escape(feat_deck)}</p>
+            <p class=\"actions\"><a href=\"{feat_url}\">Read full story &rarr;</a> <span class=\"dot\">&middot;</span> <a href=\"{_escape(feat_link)}\" target=\"_blank\" rel=\"noopener\">Open paper</a></p>
           </article>
         </section>
         """
@@ -159,8 +164,8 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
           <div class=\"nameplate-text\">Research Digest</div>
         </div>
         <p class=\"eyebrow\">Weekly Edition</p>
-        <h1>Your Science Magazine</h1>
-        <p class=\"subtitle\">A readable digest of newly published papers across your chosen topics, tuned for clarity over jargon.</p>
+        <h1>Science Summary</h1>
+        <p class=\"subtitle\">A digest of newly published papers across Nutrition and Psychology.</p>
         <div class=\"toolbar\">
           <span class=\"week\">{_escape(week_key)}</span>
           <a class=\"btn\" href=\"{_bp('/refresh')}\">Refresh issue</a>
@@ -183,23 +188,47 @@ def _render_home(posts: List[Dict[str, object]], week_key: str) -> str:
     return _html_page("Research Digest", body)
 
 
+def _render_glance_table(glance_text: str) -> str:
+    """Render the study-at-a-glance markdown-ish block as an HTML table."""
+    if not glance_text:
+        return "<p>Not available.</p>"
+    rows = ""
+    for line in glance_text.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        # Strip **label:** formatting
+        m = re.match(r"\*\*(.+?):\*\*\s*(.*)", line)
+        if m:
+            label = html.escape(m.group(1))
+            value = html.escape(m.group(2))
+            rows += f"<tr><th>{label}</th><td>{value}</td></tr>"
+        else:
+            rows += f"<tr><td colspan=\"2\">{html.escape(line)}</td></tr>"
+    return f"<table class=\"glance-table\">{rows}</table>"
+
+
 def _render_post(post: Dict[str, object]) -> str:
-    title = _escape(post.get("title"))
+    headline = _escape(post.get("headline") or post.get("title") or post.get("paper_title") or "")
     paper_title = _escape(post.get("paper_title"))
     authors = _escape(post.get("authors"))
     journal = _escape(post.get("journal"))
     pub_date = _escape(post.get("publication_date"))
     study_type = _escape(post.get("study_type"))
-    takeaway = _escape(post.get("one_sentence_takeaway"))
-    summary = _escape(post.get("summary"))
     oa = _escape(post.get("open_access_status"))
-    best_link = _escape(post.get("best_link"))
-    doi = _escape(post.get("doi"))
-    tags = post.get("topic_tags") or []
+    doi_raw = post.get("doi") or ""
+    doi = _escape(doi_raw)
+    best_link = _escape(f"https://doi.org/{doi_raw}" if doi_raw else (post.get("best_link") or ""))
+    tags = post.get("tags") or post.get("topic_tags") or []
     tags_html = "".join(f"<span class=\"tag\">{_escape(tag)}</span>" for tag in tags)
 
+    deck = _escape(post.get("deck") or post.get("one_sentence_takeaway") or "")
+    glance_html = _render_glance_table(str(post.get("study_at_a_glance") or ""))
+    what_did = _escape(post.get("what_they_did") or post.get("summary") or "")
+    what_found = _escape(post.get("what_they_found") or "")
     why = _render_bullet_block(str(post.get("why_it_matters") or ""))
-    limits = _render_bullet_block(str(post.get("limitations_and_caveats") or ""))
+    caveats = _render_bullet_block(str(post.get("caveats_and_alternative_explanations") or post.get("limitations_and_caveats") or ""))
+    read_paper = _escape(post.get("read_the_paper") or "")
 
     extra = post.get("extra_links") or {}
     links = []
@@ -212,7 +241,6 @@ def _render_post(post: Dict[str, object]) -> str:
             )
     links_html = "".join(links) if links else "<li>No additional links available.</li>"
 
-    # Format OA status nicely
     oa_display = oa.replace("_", " ").title() if oa else "Unknown"
 
     body = f"""
@@ -220,10 +248,10 @@ def _render_post(post: Dict[str, object]) -> str:
       <div class=\"mast-inner\">
         <div class=\"nameplate\">
           <div class=\"nameplate-icon\">RD</div>
-          <div class=\"nameplate-text\">Research Digest</div>
+          <div class=\"nameplate-text\">Science Summary</div>
         </div>
         <p class=\"eyebrow\">Story</p>
-        <h1>{title}</h1>
+        <h1>{headline}</h1>
         <p class=\"subtitle\">{paper_title}</p>
         <div class=\"tags\">{tags_html}</div>
         <div class=\"toolbar\">
@@ -236,23 +264,38 @@ def _render_post(post: Dict[str, object]) -> str:
     <main class=\"container post-layout\">
       <article class=\"post-main\">
         <section class=\"post-block pullquote\">
-          <h2>The takeaway</h2>
-          <p>{takeaway}</p>
+          <h2>Deck</h2>
+          <p>{deck}</p>
         </section>
 
         <section class=\"post-block\">
-          <h2>The story</h2>
-          <p class=\"story-text\">{summary}</p>
+          <h2>Study at a glance</h2>
+          {glance_html}
         </section>
 
         <section class=\"post-block\">
-          <h2>Why this matters</h2>
+          <h2>What they did</h2>
+          <p class=\"story-text\">{what_did}</p>
+        </section>
+
+        <section class=\"post-block\">
+          <h2>What they found</h2>
+          <p>{what_found}</p>
+        </section>
+
+        <section class=\"post-block\">
+          <h2>Why it matters</h2>
           {why}
         </section>
 
         <section class=\"post-block\">
-          <h2>What to keep in mind</h2>
-          {limits}
+          <h2>Caveats &amp; alternative explanations</h2>
+          {caveats}
+        </section>
+
+        <section class=\"post-block\">
+          <h2>Read the paper</h2>
+          <p style=\"font-family:var(--font-ui);font-size:0.9rem;white-space:pre-line\">{read_paper}</p>
         </section>
       </article>
 
@@ -274,7 +317,7 @@ def _render_post(post: Dict[str, object]) -> str:
       </aside>
     </main>
     """
-    return _html_page(str(post.get("title") or "Research Digest Post"), body)
+    return _html_page(str(post.get("headline") or post.get("title") or "Science Summary"), body)
 
 
 def create_handler(config: AppConfig, store: DigestStore, pipeline: DigestPipeline):

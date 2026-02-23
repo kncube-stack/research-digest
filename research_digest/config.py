@@ -65,62 +65,76 @@ DEFAULT_RSS_FEEDS = [
 
 DEFAULT_TOPIC_KEYWORDS = {
     "personality psychology": [
-        "personality", "big five", "hexaco", "trait", "neuroticism", "extraversion",
-        "openness", "conscientiousness", "agreeableness", "dark triad", "narcissism",
-        "psychometrics", "individual differences", "temperament",
+        "big five", "hexaco", "personality trait", "personality psychology",
+        "neuroticism", "extraversion", "conscientiousness", "agreeableness", "openness to experience",
+        "dark triad", "dark tetrad", "narcissism", "psychopathy", "machiavellianism",
+        "personality measurement", "personality psychometrics", "personality development",
+        "personality disorder", "individual differences in personality",
     ],
     "intelligence cognitive abilities": [
-        "intelligence", "cognitive ability", "iq", "g factor", "reasoning",
-        "cognitive ageing", "cognitive aging", "working memory", "psychometrics",
-        "heritability", "education achievement", "cognitive test",
+        "general intelligence", "g factor", "cognitive ability", "cognitive abilities",
+        "iq test", "intelligence test", "fluid intelligence", "crystallised intelligence",
+        "cognitive ageing", "cognitive aging", "working memory capacity",
+        "cognitive decline", "executive function", "processing speed",
+        "scholastic aptitude", "educational achievement", "behavioural genetics intelligence",
     ],
     "relationship science": [
-        "relationship", "mate choice", "assortative mating", "attachment",
-        "jealousy", "infidelity", "partner", "couple", "dyadic", "marriage",
-        "romantic", "APIM", "parental investment",
+        "mate choice", "mate preference", "assortative mating", "romantic relationship",
+        "adult attachment", "attachment style", "dyadic", "relationship satisfaction",
+        "jealousy", "infidelity", "couple", "marital quality", "partnership",
+        "APIM", "actor-partner", "relationship formation", "dating",
     ],
     "sex differences": [
-        "sex differences", "sex difference", "gender differences", "gender difference",
-        "male female", "men women", "developmental trajectories", "cross-cultural",
-        "biological sex",
+        "sex differences", "sex difference", "gender differences in", "biological sex",
+        "male-female differences", "sex gap", "sex-differentiated", "sex-specific",
+        "cross-sex", "dimorphism", "sex-based", "sex-stratified",
     ],
     "evolutionary psychology": [
-        "evolutionary psychology", "sexual selection", "mate preference",
-        "parental investment", "kin selection", "adaptationist", "life history",
-        "evolved", "evolution", "adaptation",
+        "evolutionary psychology", "sexual selection", "parental investment",
+        "kin selection", "adaptationist", "life history theory", "mating strategy",
+        "evolved mechanism", "evolutionary basis", "fitness", "reproductive success",
+        "natural selection human", "evolutionary perspective",
     ],
     "social psychology": [
-        "social cognition", "norms", "status", "hierarchy", "prejudice",
-        "cooperation", "aggression", "moral psychology", "group processes",
-        "intergroup", "prosocial", "social influence",
+        "social cognition", "social norm", "status hierarchy", "prejudice",
+        "intergroup", "cooperation", "prosocial behaviour", "moral psychology",
+        "group processes", "aggression", "social influence", "conformity",
+        "implicit bias", "attitude change", "social identity",
     ],
     "weight management body composition": [
-        "weight loss", "weight management", "body composition", "fat mass", "lean mass",
-        "obesity", "overweight", "energy intake", "energy expenditure", "caloric",
-        "diet intervention", "weight maintenance", "adiposity",
+        "weight loss intervention", "weight management", "body composition",
+        "fat mass", "lean mass", "obesity treatment", "adiposity",
+        "energy intake", "energy expenditure", "caloric restriction",
+        "dietary intervention weight", "weight maintenance", "BMI reduction",
+        "bariatric", "anti-obesity",
     ],
     "cardiometabolic outcomes": [
-        "cardiovascular", "CVD", "blood pressure", "lipids", "cholesterol", "apoB",
-        "glycaemia", "diabetes", "metabolic syndrome", "insulin resistance",
-        "cardiometabolic", "heart disease", "coronary",
+        "cardiovascular disease", "CVD risk", "blood pressure reduction",
+        "LDL cholesterol", "HDL cholesterol", "apoB", "triglycerides",
+        "glycaemic control", "type 2 diabetes", "metabolic syndrome",
+        "insulin resistance", "cardiometabolic", "coronary heart disease",
+        "hypertension diet", "atherosclerosis diet",
     ],
     "dietary patterns foods": [
-        "ultra-processed", "fibre", "fiber", "protein intake", "saturated fat",
-        "added sugar", "sodium", "alcohol", "mediterranean diet", "DASH diet",
-        "whole foods", "processed food", "dietary pattern", "fruit", "vegetables",
-        "red meat", "legumes",
+        "ultra-processed food", "dietary fibre", "dietary fiber", "protein intake",
+        "saturated fat intake", "added sugar", "sodium intake", "alcohol consumption",
+        "mediterranean diet", "DASH diet", "whole grain", "processed meat",
+        "dietary pattern", "plant-based diet", "red meat consumption",
+        "legume intake", "fruit and vegetable", "food consumption",
     ],
     "diet lifestyle longitudinal": [
-        "prospective cohort", "longitudinal", "incident disease", "mortality",
-        "dose-response", "substitution", "diet quality", "lifestyle", "follow-up",
-        "incident", "all-cause mortality",
+        "prospective cohort diet", "diet and mortality", "dietary intake incident",
+        "diet and cardiovascular", "diet and diabetes", "dose-response diet",
+        "food substitution", "dietary substitution", "diet quality score",
+        "healthy eating index", "all-cause mortality diet", "diet and cancer",
+        "diet cohort", "longitudinal diet",
     ],
 }
 
 
 @dataclass
 class AppConfig:
-    TIME_WINDOW_DAYS: int = 10
+    TIME_WINDOW_DAYS: int = 14
     TOPICS: List[str] = field(default_factory=lambda: list(DEFAULT_TOPICS))
     JOURNAL_PRIORITIES: Dict[str, List[str]] = field(
         default_factory=lambda: {
