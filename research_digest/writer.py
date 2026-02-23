@@ -158,38 +158,48 @@ def _tags_for_paper(paper: CandidatePaper) -> List[str]:
 # ---------------------------------------------------------------------------
 
 def _build_headline(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
-    """Create a 6–8 word magazine headline drawn from the key finding."""
-    base = ""
-    if picked["result"]:
-        base = picked["result"][0]
-    elif picked["conclusion"]:
-        base = picked["conclusion"][0]
-    elif picked["all"]:
-        base = picked["all"][0]
+    """
+    Build a complete-sentence summary of the article — one clear sentence that
+    tells the reader what the study found (or asked), who the subjects were,
+    and what the practical upshot is. Targets roughly 20–35 words.
+    """
+    # Prefer a result sentence that already contains a number (most concrete).
+    result_with_num = [s for s in picked["result"] if re.search(r"\d", s)]
+    result_sent = result_with_num[0] if result_with_num else (picked["result"][0] if picked["result"] else "")
+    conclusion_sent = picked["conclusion"][0] if picked["conclusion"] else ""
+    method_sent = picked["method"][0] if picked["method"] else ""
 
-    base = re.sub(r"[.!?]+$", "", base).strip()
-    # Strip leading boilerplate phrases
-    base = re.sub(
-        r"^(results (indicate|show|suggest)|findings (indicate|show|suggest)|"
-        r"we (found|observed|show|report)|this study (found|shows|demonstrates)|"
-        r"the (study|analysis|results?) (found|showed|demonstrated|indicated))\s+",
-        "", base, flags=re.IGNORECASE,
-    ).strip()
+    # Strip boilerplate openers from whichever sentence we pick.
+    def _clean(s: str) -> str:
+        s = re.sub(r"[.!?]+$", "", s).strip()
+        s = re.sub(
+            r"^(results (indicate|show|suggest)|findings (indicate|show|suggest)|"
+            r"we (found|observed|show|report)|this study (found|shows|demonstrates)|"
+            r"the (study|analysis|results?) (found|showed|demonstrated|indicated))[,\s]+",
+            "", s, flags=re.IGNORECASE,
+        ).strip()
+        return s[0].upper() + s[1:] if s else s
 
-    words = base.split()
+    # Try: combine a cleaned result sentence with a conclusion for a fuller picture.
+    if result_sent and conclusion_sent:
+        candidate = _clean(result_sent) + ". " + _clean(conclusion_sent) + "."
+        words = candidate.split()
+        if 15 <= len(words) <= 45:
+            return candidate
+        # Too long — just use the result sentence.
+        return _clean(result_sent) + "."
 
-    # Target 6–8 words
-    if len(words) < 6:
-        # Fall back: use a trimmed version of the paper title
-        title_words = paper.title.split()
-        headline = " ".join(title_words[:8]) if len(title_words) >= 6 else paper.title
-    else:
-        headline = " ".join(words[:8])
+    if result_sent:
+        return _clean(result_sent) + "."
 
-    headline = headline[0].upper() + headline[1:] if headline else paper.title
-    # Ensure it doesn't end mid-preposition or mid-article awkwardly
-    headline = re.sub(r"\s+(a|an|the|in|of|for|and|or|to|with|on|at|by)$", "", headline, flags=re.IGNORECASE)
-    return headline.strip()
+    if conclusion_sent:
+        return _clean(conclusion_sent) + "."
+
+    if method_sent:
+        return _clean(method_sent) + "."
+
+    # Final fallback: use the paper title as-is (already a sentence proxy).
+    return paper.title if paper.title.endswith(".") else paper.title + "."
 
 
 def _build_deck(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
@@ -266,30 +276,82 @@ def _build_what_they_did(paper: CandidatePaper, picked: Dict[str, List[str]]) ->
 
 
 def _build_what_they_found(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
-    parts = []
+    """
+    Longer, richer discussion of results: up to ~300 words drawn from result,
+    conclusion, and remaining abstract sentences. Structured as flowing prose
+    paragraphs with a causation/association note and effect-size context.
+    """
+    # ── Gather as many relevant sentences as possible ──────────────────────
+    result_sents = picked["result"]        # up to all of them
+    conclusion_sents = picked["conclusion"]
+    # Remaining abstract sentences not already in result or conclusion
+    used = set(result_sents) | set(conclusion_sents)
+    remaining = [s for s in picked["all"] if s not in used]
 
-    if picked["result"]:
-        parts.append(" ".join(picked["result"][:4]))
+    # ── Para 1: the primary results (up to 5 sentences) ────────────────────
+    para1_sents = result_sents[:5]
+    if not para1_sents:
+        para1_sents = remaining[:4]
 
-    if picked["conclusion"]:
-        parts.append(" ".join(picked["conclusion"][:2]))
+    # ── Para 2: conclusions / interpretation (up to 3 sentences) ───────────
+    para2_sents = conclusion_sents[:3]
+    if not para2_sents and remaining:
+        para2_sents = remaining[:2]
 
-    if not parts:
-        if picked["all"]:
-            parts.append(" ".join(picked["all"][:4]))
+    # ── Para 3: any remaining detail (up to 2 sentences) ───────────────────
+    # e.g. subgroup findings, sensitivity analyses mentioned in abstract
+    used2 = set(para1_sents) | set(para2_sents)
+    para3_sents = [s for s in (result_sents[5:] + remaining) if s not in used2][:2]
 
-    text = " ".join(parts)
-    if not text:
+    paragraphs = []
+    if para1_sents:
+        paragraphs.append(" ".join(para1_sents))
+    if para2_sents:
+        paragraphs.append(" ".join(para2_sents))
+    if para3_sents:
+        paragraphs.append(" ".join(para3_sents))
+
+    if not paragraphs:
         return "Results were not available in accessible metadata."
 
+    # ── Causation / association note ───────────────────────────────────────
     is_causal = paper.study_type in {"randomized controlled trial", "mendelian randomization"}
-    caution = (
-        "The design supports causal interpretation with caveats (see below)."
-        if is_causal
-        else "These are associations; causation cannot be inferred from this design alone."
-    )
+    if is_causal:
+        caution = (
+            "**Interpreting causality:** The design ({}) supports causal inference more than "
+            "observational alternatives, though residual confounding and compliance issues "
+            "remain possible. Effect sizes should be interpreted alongside confidence intervals "
+            "and clinical or practical significance thresholds.".format(
+                "RCT" if paper.study_type == "randomized controlled trial" else "Mendelian randomisation"
+            )
+        )
+    elif paper.study_type in {"meta-analysis", "systematic review"}:
+        caution = (
+            "**Interpreting the synthesis:** Pooled estimates carry the average uncertainty of "
+            "the included studies. Pay attention to I² heterogeneity statistics and whether "
+            "sensitivity analyses (e.g. leave-one-out) substantially change the headline finding."
+        )
+    elif paper.study_type == "cohort":
+        caution = (
+            "**Interpreting associations:** These are observational associations — the cohort "
+            "design cannot rule out residual confounding by unmeasured lifestyle or genetic "
+            "variables. The practical value lies in the effect magnitude and dose–response "
+            "pattern rather than proof of causation."
+        )
+    elif paper.study_type == "cross-sectional":
+        caution = (
+            "**Interpreting associations:** Cross-sectional data capture a snapshot; the "
+            "direction of causation between exposure and outcome cannot be established. "
+            "Treat these findings as hypothesis-generating rather than confirmatory."
+        )
+    else:
+        caution = (
+            "**Interpreting associations:** These findings are observational. Causation cannot "
+            "be inferred without experimental or quasi-experimental evidence."
+        )
 
-    return f"{_truncate_words(text, 150)}\n\n{caution}"
+    body = "\n\n".join(paragraphs)
+    return f"{body}\n\n{caution}"
 
 
 def _build_why_it_matters(paper: CandidatePaper) -> str:
