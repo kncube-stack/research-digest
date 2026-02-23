@@ -99,7 +99,9 @@ def _pick_sentences(paper: CandidatePaper) -> Dict[str, List[str]]:
         s for s in sentences
         if re.search(
             r"\b(conclude|suggest|interpret|implications?|overall|therefore|may indicate|"
-            r"highlight|underscore|support|challenge|warrant)\b",
+            r"highlight|underscore|support|challenge|warrant|remains?|demonstrate|"
+            r"in conclusion|in summary|taken together|these (findings|results)|"
+            r"our (findings|results)|collectively)\b",
             s, re.IGNORECASE,
         )
     ]
@@ -159,47 +161,112 @@ def _tags_for_paper(paper: CandidatePaper) -> List[str]:
 
 def _build_headline(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
     """
-    Build a complete-sentence summary of the article — one clear sentence that
-    tells the reader what the study found (or asked), who the subjects were,
-    and what the practical upshot is. Targets roughly 20–35 words.
-    """
-    # Prefer a result sentence that already contains a number (most concrete).
-    result_with_num = [s for s in picked["result"] if re.search(r"\d", s)]
-    result_sent = result_with_num[0] if result_with_num else (picked["result"][0] if picked["result"] else "")
-    conclusion_sent = picked["conclusion"][0] if picked["conclusion"] else ""
-    method_sent = picked["method"][0] if picked["method"] else ""
+    6–8 word grammatical sentence — a punchy, complete thought that captures
+    the study's core finding. Think magazine cover line: subject + verb + object.
 
-    # Strip boilerplate openers from whichever sentence we pick.
+    Strategy:
+    1. Find the key conclusion or result sentence.
+    2. Extract a subject-verb-object clause from it (up to 8 words).
+    3. Fall back to a reworked version of the paper title if the abstract
+       doesn't yield a clean short clause.
+    """
     def _clean(s: str) -> str:
         s = re.sub(r"[.!?]+$", "", s).strip()
-        s = re.sub(
-            r"^(results (indicate|show|suggest)|findings (indicate|show|suggest)|"
-            r"we (found|observed|show|report)|this study (found|shows|demonstrates)|"
-            r"the (study|analysis|results?) (found|showed|demonstrated|indicated))[,\s]+",
-            "", s, flags=re.IGNORECASE,
-        ).strip()
+        # Strip leading boilerplate openers — iteratively so chained openers are removed.
+        for _ in range(3):
+            s = re.sub(
+                r"^(results? (indicate|show|suggest|demonstrate)|"
+                r"findings (indicate|show|suggest|demonstrate)|"
+                r"these (results?|findings) (indicate|show|suggest|demonstrate|support)|"
+                r"our (results?|findings) (indicate|show|suggest|demonstrate)|"
+                r"we (found|observed|show|report|demonstrate)|"
+                r"this study (found|shows|demonstrates)|"
+                r"the (study|analysis|results?) (found|showed|demonstrated|indicated)|"
+                r"overall[,\s]+|therefore[,\s]+|together[,\s]+|"
+                r"taken together[,\s]+|in (summary|conclusion)[,\s]+)[,\s]*",
+                "", s, flags=re.IGNORECASE,
+            ).strip()
+        s = re.sub(r"^(that|which)\s+", "", s, flags=re.IGNORECASE).strip()
         return s[0].upper() + s[1:] if s else s
 
-    # Try: combine a cleaned result sentence with a conclusion for a fuller picture.
-    if result_sent and conclusion_sent:
-        candidate = _clean(result_sent) + ". " + _clean(conclusion_sent) + "."
-        words = candidate.split()
-        if 15 <= len(words) <= 45:
-            return candidate
-        # Too long — just use the result sentence.
-        return _clean(result_sent) + "."
+    # Prefer conclusion sentences — they tend to already be compact summaries.
+    # Avoid sentences that are dominated by numbers/stats (not readable as headlines).
+    def _is_number_heavy(s: str) -> bool:
+        words = s.split()
+        return len(words) > 0 and sum(bool(re.search(r"\d", w)) for w in words) / len(words) > 0.35
 
-    if result_sent:
-        return _clean(result_sent) + "."
+    conclusion_clean = [s for s in picked["conclusion"] if not _is_number_heavy(s)]
+    result_clean = [s for s in picked["result"] if not _is_number_heavy(s)]
+    result_with_num = [s for s in picked["result"] if re.search(r"\d", s) and not _is_number_heavy(s)]
 
-    if conclusion_sent:
-        return _clean(conclusion_sent) + "."
+    candidates = (
+        conclusion_clean
+        or result_clean
+        or result_with_num
+        or picked["result"]
+        or picked["method"]
+        or picked["all"]
+    )
 
-    if method_sent:
-        return _clean(method_sent) + "."
+    for sent in candidates:
+        cleaned = _clean(sent)
+        if not cleaned:
+            continue
 
-    # Final fallback: use the paper title as-is (already a sentence proxy).
-    return paper.title if paper.title.endswith(".") else paper.title + "."
+        # Try to find a subject+verb clause ending at a comma, semicolon,
+        # or natural break within the first 8 words.
+        # Split on comma or semicolon first — these often delimit compact clauses.
+        clause = re.split(r"[,;]", cleaned)[0].strip()
+        words = clause.split()
+        if 6 <= len(words) <= 8:
+            headline = clause
+        elif len(words) > 8:
+            # Trim to 8 words, back off trailing prepositions/articles.
+            weak_endings = {"a", "an", "the", "in", "of", "for", "and",
+                            "or", "to", "with", "on", "at", "by", "from",
+                            "but", "as", "if", "its", "their"}
+            end = 8
+            while end > 5 and words[end - 1].lower() in weak_endings:
+                end -= 1
+            headline = " ".join(words[:end])
+        else:
+            # Clause is shorter than 6 words — try the full cleaned sentence.
+            all_words = cleaned.split()
+            if len(all_words) >= 6:
+                weak_endings = {"a", "an", "the", "in", "of", "for", "and",
+                                "or", "to", "with", "on", "at", "by", "from",
+                                "but", "as", "if", "its", "their"}
+                end = min(8, len(all_words))
+                while end > 5 and all_words[end - 1].lower() in weak_endings:
+                    end -= 1
+                headline = " ".join(all_words[:end])
+            else:
+                continue  # Try the next candidate sentence.
+
+        # If the result starts with a gerund or infinitive (no subject), prepend "Evidence supports".
+        first_word = headline.split()[0].rstrip(".,") if headline.split() else ""
+        if first_word.lower() in {"recommending", "using", "taking", "including",
+                                   "replacing", "adding", "reducing", "increasing",
+                                   "adopting", "following", "eating", "avoiding"}:
+            headline = "Evidence supports " + headline[0].lower() + headline[1:]
+            # Re-trim to 8 words.
+            words2 = headline.split()
+            if len(words2) > 8:
+                headline = " ".join(words2[:8])
+
+        # Capitalise and end with a period.
+        headline = headline[0].upper() + headline[1:]
+        if not headline.endswith((".", "!", "?")):
+            headline += "."
+        return headline
+
+    # Final fallback: take the first 7 words of the paper title.
+    title_words = paper.title.split()
+    fallback = " ".join(title_words[:7]) if len(title_words) >= 6 else paper.title
+    fallback = fallback[0].upper() + fallback[1:]
+    if not fallback.endswith((".", "!", "?")):
+        fallback += "."
+    return fallback
 
 
 def _build_deck(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
@@ -266,171 +333,361 @@ def _build_study_at_a_glance(paper: CandidatePaper, picked: Dict[str, List[str]]
 
 
 def _build_what_they_did(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
-    if not picked["method"]:
-        if picked["all"]:
-            return _truncate_words(" ".join(picked["all"][:3]), 120)
-        return "Full methods were not available in accessible metadata."
+    """
+    Magazine-style methods paragraph. Sets the scene: who was studied, how,
+    for how long, and what the researchers were trying to answer. Reads as
+    flowing prose, not a bullet list.
+    """
+    method_sents = picked["method"][:5]
+    if not method_sents:
+        method_sents = picked["all"][:4]
+    if not method_sents:
+        return "Full methods were not available in the accessible abstract."
 
-    method_text = " ".join(picked["method"][:4])
-    return _truncate_words(method_text, 120)
+    # Design label for inline use
+    design_prose = {
+        "randomized controlled trial": "a randomised controlled trial",
+        "meta-analysis": "a meta-analysis",
+        "systematic review": "a systematic review and meta-analysis",
+        "mendelian randomization": "a Mendelian randomisation study",
+        "cohort": "a prospective cohort study",
+        "cross-sectional": "a cross-sectional survey",
+        "case-control": "a case-control study",
+    }.get(paper.study_type, "a peer-reviewed study")
+
+    sample = _extract_sample(paper)
+    timeframe = _extract_timeframe(paper)
+
+    # Opening sentence frames the design and scale.
+    opening = f"The researchers conducted {design_prose}"
+    if sample != "Not reported in abstract":
+        opening += f" involving {sample}"
+    if timeframe:
+        opening += f" with a follow-up period of {timeframe}"
+    opening += "."
+
+    # Body: all method sentences joined as prose.
+    body = " ".join(method_sents)
+
+    return f"{opening} {body}"
 
 
 def _build_what_they_found(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
     """
-    Longer, richer discussion of results: up to ~300 words drawn from result,
-    conclusion, and remaining abstract sentences. Structured as flowing prose
-    paragraphs with a causation/association note and effect-size context.
+    The main body of the article — magazine-quality prose that walks the reader
+    through the results as a science journalist would. Three paragraphs:
+      1. Primary results in full (all available result sentences).
+      2. Authors' interpretation / conclusions in context.
+      3. Nuance: subgroup differences, dose–response, secondary outcomes, or
+         remaining abstract content that enriches the picture.
+    Closes with a design-specific paragraph on how to read the evidence.
     """
-    # ── Gather as many relevant sentences as possible ──────────────────────
-    result_sents = picked["result"]        # up to all of them
+    result_sents = picked["result"]
     conclusion_sents = picked["conclusion"]
-    # Remaining abstract sentences not already in result or conclusion
     used = set(result_sents) | set(conclusion_sents)
     remaining = [s for s in picked["all"] if s not in used]
 
-    # ── Para 1: the primary results (up to 5 sentences) ────────────────────
-    para1_sents = result_sents[:5]
+    # ── Para 1: primary results ────────────────────────────────────────────
+    para1_sents = result_sents[:6]
     if not para1_sents:
         para1_sents = remaining[:4]
 
-    # ── Para 2: conclusions / interpretation (up to 3 sentences) ───────────
-    para2_sents = conclusion_sents[:3]
+    # ── Para 2: conclusions / authors' interpretation ──────────────────────
+    para2_sents = conclusion_sents[:4]
     if not para2_sents and remaining:
-        para2_sents = remaining[:2]
+        para2_sents = remaining[:3]
 
-    # ── Para 3: any remaining detail (up to 2 sentences) ───────────────────
-    # e.g. subgroup findings, sensitivity analyses mentioned in abstract
+    # ── Para 3: additional texture — subgroups, sensitivity, secondary outcomes
     used2 = set(para1_sents) | set(para2_sents)
-    para3_sents = [s for s in (result_sents[5:] + remaining) if s not in used2][:2]
+    extra = [s for s in (result_sents[6:] + remaining) if s not in used2]
+    para3_sents = extra[:3]
 
-    paragraphs = []
+    # ── Assemble paragraphs ────────────────────────────────────────────────
+    paragraphs: List[str] = []
+
     if para1_sents:
         paragraphs.append(" ".join(para1_sents))
+
     if para2_sents:
-        paragraphs.append(" ".join(para2_sents))
+        # Transition intro varies by study type for natural prose flow.
+        transitions = {
+            "randomized controlled trial": "The authors interpret these effects as follows:",
+            "meta-analysis": "Pooling evidence across studies, the authors conclude:",
+            "systematic review": "Across the body of evidence reviewed, the authors note:",
+            "mendelian randomization": "Using genetic proxies to tease apart causation, the researchers argue:",
+            "cohort": "Looking at the longer picture, the researchers conclude:",
+            "cross-sectional": "Drawing on the cross-sectional data, the authors suggest:",
+        }
+        transition = transitions.get(paper.study_type, "The authors interpret these findings as follows:")
+        paragraphs.append(f"{transition} " + " ".join(para2_sents))
+
     if para3_sents:
-        paragraphs.append(" ".join(para3_sents))
+        paragraphs.append(
+            "Further detail from the abstract: " + " ".join(para3_sents)
+        )
 
     if not paragraphs:
-        return "Results were not available in accessible metadata."
+        return "Results were not available in the accessible abstract."
 
-    # ── Causation / association note ───────────────────────────────────────
-    is_causal = paper.study_type in {"randomized controlled trial", "mendelian randomization"}
-    if is_causal:
-        caution = (
-            "**Interpreting causality:** The design ({}) supports causal inference more than "
-            "observational alternatives, though residual confounding and compliance issues "
-            "remain possible. Effect sizes should be interpreted alongside confidence intervals "
-            "and clinical or practical significance thresholds.".format(
-                "RCT" if paper.study_type == "randomized controlled trial" else "Mendelian randomisation"
-            )
+    # ── Design-specific evidence-reading paragraph ─────────────────────────
+    if paper.study_type == "randomized controlled trial":
+        reading_guide = (
+            "**How to read this evidence:** A randomised controlled trial is the closest "
+            "science gets to a controlled experiment in humans. Participants were assigned "
+            "to conditions by chance, which distributes known and unknown confounders "
+            "across groups. That said, real-world compliance, blinding limitations, and "
+            "short trial durations can all shrink or distort the true effect. When reading "
+            "the headline number, look for the confidence interval — a wide interval "
+            "signals uncertainty even if the point estimate looks impressive. And ask "
+            "whether the outcome measured is the one that matters clinically or practically."
+        )
+    elif paper.study_type == "mendelian randomization":
+        reading_guide = (
+            "**How to read this evidence:** Mendelian randomisation exploits the random "
+            "inheritance of genetic variants as natural instruments for an exposure — "
+            "a clever workaround for the confounding that plagues standard observational "
+            "research. Because genes are set at conception, they cannot be caused by "
+            "lifestyle choices, making reverse causation unlikely. The key caveat is "
+            "pleiotropy: if a genetic variant affects the outcome through a pathway other "
+            "than the exposure of interest, the causal estimate is biased. Sensitivity "
+            "analyses (weighted median, MR-Egger) are designed to detect this — check "
+            "whether the paper reports them."
         )
     elif paper.study_type in {"meta-analysis", "systematic review"}:
-        caution = (
-            "**Interpreting the synthesis:** Pooled estimates carry the average uncertainty of "
-            "the included studies. Pay attention to I² heterogeneity statistics and whether "
-            "sensitivity analyses (e.g. leave-one-out) substantially change the headline finding."
+        reading_guide = (
+            "**How to read this evidence:** A meta-analysis or systematic review synthesises "
+            "many studies into a single pooled estimate, which carries more statistical "
+            "weight than any individual finding. But its quality is only as good as the "
+            "studies it includes. Look at the heterogeneity statistic (I²): values above "
+            "50–75% suggest the studies are measuring meaningfully different things, and "
+            "the pooled number becomes harder to interpret. Publication bias — the tendency "
+            "for positive results to appear in journals more often than null results — "
+            "can also inflate pooled effect sizes. Funnel plots and Egger's test are "
+            "standard checks; note whether the paper addresses them."
         )
     elif paper.study_type == "cohort":
-        caution = (
-            "**Interpreting associations:** These are observational associations — the cohort "
-            "design cannot rule out residual confounding by unmeasured lifestyle or genetic "
-            "variables. The practical value lies in the effect magnitude and dose–response "
-            "pattern rather than proof of causation."
+        reading_guide = (
+            "**How to read this evidence:** Prospective cohort studies follow people over "
+            "time, recording exposures before outcomes occur. This rules out reverse "
+            "causation — you know the exposure came first. What cohort studies cannot do "
+            "is rule out confounding: people who eat more vegetables also tend to exercise "
+            "more, smoke less, and earn more. Researchers adjust for known confounders, "
+            "but unmeasured variables always remain. The practical read: a large, "
+            "well-adjusted cohort showing a consistent dose–response relationship (more "
+            "exposure → more or less outcome in a graduated way) is more persuasive than "
+            "a binary high-vs-low comparison with modest adjustment."
         )
     elif paper.study_type == "cross-sectional":
-        caution = (
-            "**Interpreting associations:** Cross-sectional data capture a snapshot; the "
-            "direction of causation between exposure and outcome cannot be established. "
-            "Treat these findings as hypothesis-generating rather than confirmatory."
+        reading_guide = (
+            "**How to read this evidence:** A cross-sectional study is a snapshot — "
+            "exposure and outcome are measured at the same moment, so there is no way "
+            "to know which came first. A person's diet today may reflect their health "
+            "status as much as it influences it. That makes reverse causation a standing "
+            "concern. These studies are best read as scene-setters: they can identify "
+            "associations worth following up with longitudinal or experimental designs, "
+            "but they cannot confirm causation on their own."
         )
     else:
-        caution = (
-            "**Interpreting associations:** These findings are observational. Causation cannot "
-            "be inferred without experimental or quasi-experimental evidence."
+        reading_guide = (
+            "**How to read this evidence:** The study design limits causal claims — "
+            "associations identified here should be treated as hypotheses for future "
+            "experimental or quasi-experimental investigation. Look at sample size, "
+            "adjustment strategy, and whether findings replicate in independent cohorts "
+            "before updating beliefs substantially."
         )
 
     body = "\n\n".join(paragraphs)
-    return f"{body}\n\n{caution}"
+    return f"{body}\n\n{reading_guide}"
 
 
 def _build_why_it_matters(paper: CandidatePaper) -> str:
-    bullets = []
+    """
+    Magazine-style 'so what?' section — flowing prose that explains why this
+    paper deserves the reader's attention, what gap it fills, and what it
+    might change in practice or in the scientific conversation.
+    """
+    cluster = CLUSTER_TAG_MAP.get(paper.topic_tags[0], paper.topic_tags[0]) if paper.topic_tags else "this field"
 
-    if paper.topic_tags:
-        cluster = CLUSTER_TAG_MAP.get(paper.topic_tags[0], paper.topic_tags[0])
-        bullets.append(f"Adds a fresh, peer-reviewed data point to the {cluster} literature.")
-
+    # ── Design-specific significance statement ─────────────────────────────
     if paper.study_type in {"meta-analysis", "systematic review"}:
-        bullets.append(
-            "Evidence synthesis shifts confidence more than a single study, "
-            "assuming the included studies are methodologically sound."
+        design_note = (
+            f"In the {cluster} literature, individual studies accumulate slowly and "
+            f"often point in conflicting directions. A meta-analysis or systematic review "
+            f"is the mechanism by which the field reconciles those conflicts — it pools "
+            f"the evidence and, when done well, arrives at an estimate more reliable than "
+            f"any single experiment. A new synthesis therefore shifts the evidentiary "
+            f"baseline in a way that a single study simply cannot."
         )
     elif paper.study_type == "randomized controlled trial":
-        bullets.append("The RCT design targets causal inference, not merely correlation.")
+        design_note = (
+            f"Most of what we know about {cluster} comes from observational data — "
+            f"associations that could reflect confounding as much as genuine effects. "
+            f"A randomised trial cuts through that ambiguity by assigning participants "
+            f"to conditions by chance, making it the closest approximation to a controlled "
+            f"experiment available in human research. When an RCT produces a clear result, "
+            f"it carries more evidential weight than a dozen cohort studies pointing the "
+            f"same way."
+        )
     elif paper.study_type == "mendelian randomization":
-        bullets.append(
-            "Mendelian randomisation offers a quasi-causal test that is harder to confound "
-            "than standard observational designs."
+        design_note = (
+            f"Establishing causation in {cluster} research is notoriously difficult: "
+            f"people who differ on one variable tend to differ on many. Mendelian "
+            f"randomisation sidesteps this by using genetic variants — fixed at birth "
+            f"and unaffected by lifestyle — as proxies for the exposure of interest. "
+            f"It is not a perfect instrument, but it adds a qualitatively different kind "
+            f"of evidence to a literature otherwise dominated by correlational data."
         )
     elif paper.study_type == "cohort":
-        bullets.append("Long follow-up cohort data can reveal dose–response and substitution patterns over time.")
-
-    if re.search(r"substitut|replac.{0,20}(with|by)", paper.abstract, re.IGNORECASE):
-        bullets.append(
-            "The substitution framing (what replaces what) is practically useful: "
-            "it goes beyond 'food X is bad' to compare realistic dietary swaps."
+        design_note = (
+            f"Large prospective cohorts are the workhorses of {cluster} research. "
+            f"By tracking the same people over years, they can observe how small "
+            f"differences in behaviour or biology compound into substantially different "
+            f"outcomes. They are especially useful for estimating dose–response "
+            f"relationships and for testing whether an effect holds across subgroups — "
+            f"questions that shorter trials cannot answer."
+        )
+    else:
+        design_note = (
+            f"This study adds a peer-reviewed data point to the {cluster} literature "
+            f"at a time when the evidence base is still being assembled. Even descriptive "
+            f"or cross-sectional work matters when it identifies patterns that deserve "
+            f"experimental follow-up."
         )
 
-    if paper.open_access_status == "OPEN_ACCESS":
-        bullets.append("Open access — you can verify methods and full results without paywall friction.")
+    # ── Substitution framing note (nutrition context) ──────────────────────
+    substitution_note = ""
+    if re.search(r"substitut|replac.{0,20}(with|by)", paper.abstract, re.IGNORECASE):
+        substitution_note = (
+            " The substitution framing is worth highlighting: rather than simply "
+            "asking whether food X is 'bad', the study asks what happens when you "
+            "swap it for food Y — a more realistic and actionable question for "
+            "everyday dietary decisions."
+        )
 
-    return "\n".join(f"- {b}" for b in bullets[:4])
+    # ── Open access note ───────────────────────────────────────────────────
+    oa_note = ""
+    if paper.open_access_status == "OPEN_ACCESS":
+        oa_note = (
+            " The paper is open access, so anyone can examine the methods, "
+            "supplementary tables, and raw effect sizes directly — no paywall required."
+        )
+
+    return design_note + substitution_note + oa_note
 
 
 def _build_caveats(paper: CandidatePaper, picked: Dict[str, List[str]]) -> str:
-    bullets = []
+    """
+    Magazine-style caveats section — written as flowing prose that honestly
+    engages with the study's limitations without dismissing the findings.
+    Reads like a critical friend explaining what to watch out for.
+    """
+    paras: List[str] = []
 
+    # ── Primary design caveat ──────────────────────────────────────────────
     if paper.study_type == "cross-sectional":
-        bullets.append("Cross-sectional design: temporal order is unknown; reverse causation is possible.")
+        paras.append(
+            "The most important limitation here is the snapshot design. Because exposure "
+            "and outcome are measured simultaneously, there is no way to establish which "
+            "came first. A person's current diet, mood, or behaviour may well be a "
+            "consequence of their health status rather than a cause of it — a problem "
+            "called reverse causation. Cross-sectional findings are best treated as "
+            "signals that warrant longitudinal follow-up, not as evidence of effect."
+        )
     elif paper.study_type == "cohort":
-        bullets.append(
-            "Residual confounding is the primary limit in observational cohort work — "
-            "dietary and lifestyle variables are difficult to isolate."
+        paras.append(
+            "Even the best-designed cohort study cannot fully escape confounding. People "
+            "who score high on one dietary or behavioural variable tend to score differently "
+            "on dozens of others — income, education, sleep, exercise, stress — and "
+            "researchers can only adjust for variables they have measured. Whatever remains "
+            "unmeasured can silently inflate or deflate the apparent effect. This is "
+            "especially true in nutrition and lifestyle research, where the things people "
+            "do are deeply intertwined. A finding that survives multiple adjustments and "
+            "dose–response testing is more persuasive, but residual confounding can never "
+            "be ruled out entirely."
         )
     elif paper.study_type in {"meta-analysis", "systematic review"}:
-        bullets.append(
-            "Quality depends on the constituent studies; high heterogeneity undermines pooled estimates."
+        paras.append(
+            "A meta-analysis is only as strong as its constituent studies. If the "
+            "literature it draws on is dominated by small trials, poor adjustment, or "
+            "publication bias — the tendency for positive results to reach journals more "
+            "readily than null ones — the pooled estimate will inherit those flaws. "
+            "Heterogeneity is the key diagnostic: when I² is high, the studies are "
+            "measuring something meaningfully different from each other, and the pooled "
+            "number becomes an average of apples and oranges. Look for whether the "
+            "authors run sensitivity analyses that remove influential studies or restrict "
+            "to higher-quality designs."
         )
     elif paper.study_type == "mendelian randomization":
-        bullets.append(
-            "MR assumes the genetic instruments affect the outcome only through the exposure (exclusion restriction); "
-            "pleiotropy can violate this."
+        paras.append(
+            "Mendelian randomisation is an elegant design, but it rests on assumptions "
+            "that can be violated. The most critical is the exclusion restriction: "
+            "the genetic instruments used must affect the outcome only through the "
+            "exposure of interest, not through any other pathway. When a single gene "
+            "influences multiple traits — a phenomenon called pleiotropy — this "
+            "assumption breaks down and the causal estimate becomes unreliable. "
+            "Sensitivity analyses such as MR-Egger and the weighted median estimator "
+            "are designed to detect pleiotropy; their presence (and consistency with "
+            "the main result) is a mark of a more credible analysis."
+        )
+    elif paper.study_type == "randomized controlled trial":
+        paras.append(
+            "RCTs are the gold standard for causal inference, but they are not immune "
+            "to limitations. Compliance — whether participants actually adhere to their "
+            "assigned condition — is a persistent problem, especially in behavioural "
+            "and dietary trials. Short intervention periods may not capture long-term "
+            "effects. And the sample enrolled (often volunteers, often younger, often "
+            "healthier than average) may not represent the broader population to whom "
+            "the results are meant to apply."
+        )
+    else:
+        paras.append(
+            "The study design limits the strength of causal claims that can be made. "
+            "Without random assignment or a quasi-experimental instrument, confounding "
+            "remains a standing concern. Treat the findings as informative but not "
+            "definitive, and watch for independent replication."
         )
 
+    # ── Self-report caveat ─────────────────────────────────────────────────
     if re.search(r"self.report|questionnaire|recall|ffq|food frequency", paper.abstract, re.IGNORECASE):
-        bullets.append(
-            "Dietary/behavioural measurement relies on self-report, which is subject to recall bias and misclassification."
+        paras.append(
+            "Measurement is another sticking point. Dietary intake and many psychological "
+            "variables are self-reported, which introduces recall bias (people misremember "
+            "what they ate or did) and social desirability bias (people report what sounds "
+            "healthy or acceptable). Food frequency questionnaires in particular are known "
+            "to produce systematic under- or over-estimation depending on food type and "
+            "respondent characteristics. Objective biomarkers or repeated 24-hour recalls "
+            "reduce this problem but are rarely feasible at scale."
         )
 
-    bullets.append(
-        "Generalisability may be limited by sample characteristics (age, ethnicity, country) "
-        "not fully described in accessible metadata."
+    # ── Generalisability caveat ────────────────────────────────────────────
+    paras.append(
+        "Generalisability is worth considering whenever a study reports striking results. "
+        "Findings from one population — defined by age, sex, ethnicity, geographic region, "
+        "or baseline health — do not automatically transfer to others. This is especially "
+        "relevant in nutrition research, where gut microbiome composition, food environment, "
+        "and cultural eating patterns vary enormously across groups."
     )
 
+    # ── Paywall caveat ─────────────────────────────────────────────────────
     if paper.open_access_status == "PAYWALLED":
-        bullets.append(
-            "Full text was paywalled during drafting — technical details (adjustment strategy, "
-            "sensitivity analyses) require verification."
+        paras.append(
+            "Note that the full text was behind a paywall during drafting, which means "
+            "technical details — the full adjustment model, sensitivity analyses, and "
+            "supplementary tables — could not be verified from the abstract alone. "
+            "The summary above should be read with that limitation in mind."
         )
 
+    # ── Multiple comparisons note (psychology / non-nutrition) ─────────────
     if not _is_nutrition_paper(paper):
-        bullets.append(
-            "Check whether primary and secondary outcomes are clearly distinguished, "
-            "and whether reported effects survive correction for multiple comparisons."
+        paras.append(
+            "As with most psychological research, it is worth checking whether the "
+            "reported effects were pre-registered, and whether the headline finding "
+            "survives correction for multiple comparisons. Exploratory findings that "
+            "happen to reach p < .05 are a known source of inflated effect sizes in "
+            "the psychology literature."
         )
 
-    return "\n".join(f"- {b}" for b in bullets[:5])
+    return "\n\n".join(paras)
 
 
 # ---------------------------------------------------------------------------
