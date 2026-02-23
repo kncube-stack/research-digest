@@ -6,111 +6,121 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 DEFAULT_TOPICS = [
-    "nutrition",
-    "evolutionary psychology",
+    "personality psychology",
+    "intelligence cognitive abilities",
     "relationship science",
-    "personality science",
-    "psychology of men and boys",
-    "behaviour genetics",
-    "intelligence research",
+    "sex differences",
+    "evolutionary psychology",
+    "social psychology",
+    "weight management body composition",
+    "cardiometabolic outcomes",
+    "dietary patterns foods",
+    "diet lifestyle longitudinal",
 ]
 
 DEFAULT_JOURNAL_PRIORITIES = {
     "tier1": [
-        "Nature",
-        "Science",
-        "Cell",
+        "The BMJ",
+        "BMJ",
+        "JAMA",
         "The Lancet",
         "New England Journal of Medicine",
-        "JAMA",
-        "BMJ",
-        "PNAS",
+        "Nature Human Behaviour",
+        "Psychological Science",
+        "Journal of Personality and Social Psychology",
+        "Journal of Experimental Psychology: General",
+        "Evolution and Human Behavior",
     ],
     "tier2": [
-        "Nature Medicine",
-        "Nature Metabolism",
-        "Nature Communications",
-        "Science Advances",
-        "Psychological Science",
-        "Perspectives on Psychological Science",
-        "Psychological Bulletin",
-        "Trends in Cognitive Sciences",
-        "Annual Review of Psychology",
-        "Annual Review of Nutrition",
+        "Intelligence",
+        "Personality and Individual Differences",
+        "Journal of Research in Personality",
+        "Social Psychological and Personality Science",
+        "Psychological Methods",
+        "The American Journal of Clinical Nutrition",
+        "The Journal of Nutrition",
+        "Clinical Nutrition",
+        "Circulation",
+        "European Heart Journal",
+        "Diabetes Care",
+        "Diabetologia",
+        "Obesity",
+        "International Journal of Obesity",
     ],
     "tier3": [],
 }
 
 DEFAULT_RSS_FEEDS = [
-    {"name": "Nature", "url": "https://www.nature.com/nature.rss"},
-    {"name": "Nature Communications", "url": "https://www.nature.com/ncomms.rss"},
-    {"name": "PNAS", "url": "https://www.pnas.org/rss/current.xml"},
+    {"name": "Psychological Science", "url": "https://journals.sagepub.com/action/showFeed?type=etoc&feed=rss&jc=pssa"},
+    {"name": "Nature Human Behaviour", "url": "https://www.nature.com/nathumbehav.rss"},
+    {"name": "Evolution and Human Behavior", "url": "https://www.sciencedirect.com/journal/evolution-and-human-behavior/rss"},
+    {"name": "Journal of Personality and Social Psychology", "url": "https://www.apa.org/pubs/journals/rss/psp-rss.xml"},
     {"name": "BMJ", "url": "https://www.bmj.com/rss/current.xml"},
     {"name": "JAMA Network Open", "url": "https://jamanetwork.com/rss/site_4/0.xml"},
-    {"name": "Psychological Science", "url": "https://journals.sagepub.com/action/showFeed?type=etoc&feed=rss&jc=pssa"},
+    {"name": "The Lancet", "url": "https://www.thelancet.com/rssfeed/lancet_online.xml"},
+    {"name": "American Journal of Clinical Nutrition", "url": "https://academic.oup.com/rss/site_6122/advanceAccess_6122.xml"},
+    {"name": "Circulation", "url": "https://www.ahajournals.org/action/showFeed?type=etoc&feed=rss&jc=circ"},
+    {"name": "European Heart Journal", "url": "https://academic.oup.com/rss/site_5375/advanceAccess_5375.xml"},
 ]
 
 DEFAULT_TOPIC_KEYWORDS = {
-    "nutrition": [
-        "nutrition",
-        "diet",
-        "food",
-        "intake",
-        "feeding",
-        "weight",
-        "obesity",
-        "metabolism",
+    "personality psychology": [
+        "personality", "big five", "hexaco", "trait", "neuroticism", "extraversion",
+        "openness", "conscientiousness", "agreeableness", "dark triad", "narcissism",
+        "psychometrics", "individual differences", "temperament",
     ],
-    "evolutionary psychology": [
-        "evolutionary psychology",
-        "sexual selection",
-        "mate choice",
-        "adaptation",
-        "evolved",
+    "intelligence cognitive abilities": [
+        "intelligence", "cognitive ability", "iq", "g factor", "reasoning",
+        "cognitive ageing", "cognitive aging", "working memory", "psychometrics",
+        "heritability", "education achievement", "cognitive test",
     ],
     "relationship science": [
-        "relationship",
-        "marriage",
-        "partner",
-        "attachment",
-        "intimacy",
-        "couple",
+        "relationship", "mate choice", "assortative mating", "attachment",
+        "jealousy", "infidelity", "partner", "couple", "dyadic", "marriage",
+        "romantic", "APIM", "parental investment",
     ],
-    "personality science": [
-        "personality",
-        "trait",
-        "big five",
-        "temperament",
-        "individual differences",
+    "sex differences": [
+        "sex differences", "sex difference", "gender differences", "gender difference",
+        "male female", "men women", "developmental trajectories", "cross-cultural",
+        "biological sex",
     ],
-    "psychology of men and boys": [
-        "men",
-        "boys",
-        "male psychology",
-        "masculinity",
-        "fatherhood",
+    "evolutionary psychology": [
+        "evolutionary psychology", "sexual selection", "mate preference",
+        "parental investment", "kin selection", "adaptationist", "life history",
+        "evolved", "evolution", "adaptation",
     ],
-    "behaviour genetics": [
-        "behaviour genetics",
-        "twin",
-        "heritability",
-        "polygenic",
-        "genome-wide",
-        "mendelian randomization",
+    "social psychology": [
+        "social cognition", "norms", "status", "hierarchy", "prejudice",
+        "cooperation", "aggression", "moral psychology", "group processes",
+        "intergroup", "prosocial", "social influence",
     ],
-    "intelligence research": [
-        "intelligence",
-        "cognitive ability",
-        "iq",
-        "reasoning",
-        "g factor",
+    "weight management body composition": [
+        "weight loss", "weight management", "body composition", "fat mass", "lean mass",
+        "obesity", "overweight", "energy intake", "energy expenditure", "caloric",
+        "diet intervention", "weight maintenance", "adiposity",
+    ],
+    "cardiometabolic outcomes": [
+        "cardiovascular", "CVD", "blood pressure", "lipids", "cholesterol", "apoB",
+        "glycaemia", "diabetes", "metabolic syndrome", "insulin resistance",
+        "cardiometabolic", "heart disease", "coronary",
+    ],
+    "dietary patterns foods": [
+        "ultra-processed", "fibre", "fiber", "protein intake", "saturated fat",
+        "added sugar", "sodium", "alcohol", "mediterranean diet", "DASH diet",
+        "whole foods", "processed food", "dietary pattern", "fruit", "vegetables",
+        "red meat", "legumes",
+    ],
+    "diet lifestyle longitudinal": [
+        "prospective cohort", "longitudinal", "incident disease", "mortality",
+        "dose-response", "substitution", "diet quality", "lifestyle", "follow-up",
+        "incident", "all-cause mortality",
     ],
 }
 
 
 @dataclass
 class AppConfig:
-    TIME_WINDOW_DAYS: int = 7
+    TIME_WINDOW_DAYS: int = 10
     TOPICS: List[str] = field(default_factory=lambda: list(DEFAULT_TOPICS))
     JOURNAL_PRIORITIES: Dict[str, List[str]] = field(
         default_factory=lambda: {
@@ -118,10 +128,10 @@ class AppConfig:
         }
     )
     OPEN_ACCESS_PRIORITY: bool = True
-    MAX_PAPERS_PER_WEEK: int = 12
+    MAX_PAPERS_PER_WEEK: int = 14
     MIN_PAPERS_PER_TOPIC: int = 1
     EXCLUDE: List[str] = field(
-        default_factory=lambda: ["preprints only", "conference abstracts", "non-peer reviewed"]
+        default_factory=lambda: ["conference abstracts", "non-peer reviewed"]
     )
     OUTPUT_LANGUAGE: str = "English (UK)"
     AUDIENCE_LEVEL: str = "educated non-specialist"

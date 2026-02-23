@@ -11,33 +11,74 @@ from .models import CandidatePaper, RankedPaper
 
 STUDY_PATTERNS = [
     ("systematic review", [r"systematic review", r"review and meta", r"meta-analysis"]),
-    ("meta-analysis", [r"meta-analysis", r"meta analysis"]),
+    ("meta-analysis", [r"meta-analysis", r"meta analysis", r"network meta"]),
     (
         "randomized controlled trial",
-        [r"randomized", r"randomised", r"double-blind", r"placebo-controlled", r"trial"],
+        [r"randomized", r"randomised", r"double-blind", r"placebo-controlled", r"\brct\b", r"feeding study"],
     ),
     ("mendelian randomization", [r"mendelian randomization", r"mendelian randomisation"]),
-    ("cohort", [r"cohort", r"longitudinal", r"prospective"]),
+    ("cohort", [r"prospective cohort", r"\bcohort\b", r"longitudinal"]),
     ("case-control", [r"case-control", r"case control"]),
     ("cross-sectional", [r"cross-sectional", r"cross sectional"]),
-    ("animal", [r"mice", r"mouse", r"rat", r"animal model", r"murine"]),
-    ("mechanistic", [r"in vitro", r"mechanism", r"pathway", r"cell line"]),
-    ("theory", [r"theory", r"conceptual", r"commentary"]),
+    ("animal", [r"mice", r"mouse", r"rat\b", r"animal model", r"murine"]),
+    ("mechanistic", [r"in vitro", r"cell line", r"organoid", r"ex vivo", r"pathway", r"mechanistic"]),
+    ("theory", [r"\btheory\b", r"conceptual", r"commentary", r"perspective"]),
 ]
 
 STUDY_PRIORITY = {
     "systematic review": 4.0,
     "meta-analysis": 4.0,
-    "randomized controlled trial": 3.4,
-    "mendelian randomization": 3.0,
-    "cohort": 2.7,
+    "randomized controlled trial": 3.6,
+    "mendelian randomization": 3.2,
+    "cohort": 2.8,
     "case-control": 2.3,
     "cross-sectional": 2.0,
-    "animal": 1.7,
-    "mechanistic": 1.6,
+    "animal": 1.0,
+    "mechanistic": 1.0,
     "theory": 1.2,
     "unknown": 1.8,
 }
+
+# Nutrition topics: these require design-level filtering.
+NUTRITION_TOPICS = {
+    "weight management body composition",
+    "cardiometabolic outcomes",
+    "dietary patterns foods",
+    "diet lifestyle longitudinal",
+}
+
+# Nutrition study designs that are acceptable.
+NUTRITION_ACCEPTABLE_DESIGNS = {
+    "systematic review",
+    "meta-analysis",
+    "randomized controlled trial",
+    "mendelian randomization",
+    "cohort",
+    "cross-sectional",  # allowed per brief
+}
+
+# Purely mechanistic signals in nutrition context — used to exclude.
+MECHANISTIC_NUTRITION_SIGNALS = [
+    r"in vitro",
+    r"cell line",
+    r"organoid",
+    r"ex vivo",
+    r"mouse model",
+    r"murine",
+    r"\brats?\b",
+    r"primary culture",
+]
+
+# Ranking boost signals from the brief.
+QUALITY_BOOST_PATTERNS = [
+    (r"preregistered|registered report|pre-registered", 6.0),
+    (r"replication|replicated|replicat", 5.0),
+    (r"multi-site|multisite|multi-centre|multicenter|multicentre", 4.0),
+    (r"within-person|within-subject|dyadic|apim", 4.0),
+    (r"negative control|triangulat|sensitivity anal", 3.0),
+    (r"substitut(?:ion|ing)|replac(?:ing|ement) .{0,30}(?:with|by)", 4.0),  # substitution framing
+    (r"dose.response|dose response", 2.0),
+]
 
 TIER1_HINTS = [
     "nature",
@@ -49,6 +90,11 @@ TIER1_HINTS = [
     "bmj",
     "proceedings of the national academy of sciences",
     "pnas",
+    "nature human behaviour",
+    "psychological science",
+    "journal of personality and social psychology",
+    "journal of experimental psychology",
+    "evolution and human behavior",
 ]
 
 
@@ -58,6 +104,30 @@ def infer_study_type(paper: CandidatePaper) -> str:
         if any(re.search(pattern, text) for pattern in patterns):
             return label
     return "unknown"
+
+
+def _is_purely_mechanistic_nutrition(paper: CandidatePaper) -> bool:
+    """Return True for nutrition papers that are purely mechanistic (no human diet exposure + outcome)."""
+    text = f"{paper.title} {paper.abstract}".lower()
+    has_mechanistic = any(re.search(p, text) for p in MECHANISTIC_NUTRITION_SIGNALS)
+    if not has_mechanistic:
+        return False
+    # If it also has clear human study signals it is not purely mechanistic.
+    human_signals = re.search(
+        r"\b(participants?|patients?|cohort|randomized|randomised|trial|survey|"
+        r"prospective|longitudinal|men|women|adults?|children|adolescents?)\b",
+        text,
+    )
+    return not bool(human_signals)
+
+
+def _quality_boost(paper: CandidatePaper) -> float:
+    text = f"{paper.title} {paper.abstract}".lower()
+    total = 0.0
+    for pattern, boost in QUALITY_BOOST_PATTERNS:
+        if re.search(pattern, text):
+            total += boost
+    return total
 
 
 def classify_journal_tier(journal: str, config: AppConfig) -> int:
@@ -93,7 +163,6 @@ def match_topics(paper: CandidatePaper, config: AppConfig) -> Dict[str, float]:
             if not kw:
                 continue
             if kw in text:
-                # Full topic phrase gets stronger weighting than token-level hits.
                 score += 2.5 if kw == key else 1.0
         if topic.lower() in text:
             score += 1.5
@@ -102,9 +171,12 @@ def match_topics(paper: CandidatePaper, config: AppConfig) -> Dict[str, float]:
     return topic_scores
 
 
+def _is_nutrition_paper(topic_scores: Dict[str, float]) -> bool:
+    return any(t in NUTRITION_TOPICS for t in topic_scores)
+
+
 def score_candidate(paper: CandidatePaper, config: AppConfig, now: date) -> Tuple[float, Dict[str, float]]:
     paper.study_type = infer_study_type(paper)
-    journal_tier = classify_journal_tier(paper.journal, config)
     topic_scores = match_topics(paper, config)
 
     if not topic_scores:
@@ -114,8 +186,33 @@ def score_candidate(paper: CandidatePaper, config: AppConfig, now: date) -> Tupl
             "topic_match": 0.0,
             "study_type": 0.0,
             "novelty": 0.0,
+            "quality_boost": 0.0,
         }
 
+    # Exclude purely mechanistic nutrition papers.
+    if _is_nutrition_paper(topic_scores) and _is_purely_mechanistic_nutrition(paper):
+        return 0.0, {
+            "journal": 0.0,
+            "open_access": 0.0,
+            "topic_match": 0.0,
+            "study_type": 0.0,
+            "novelty": 0.0,
+            "quality_boost": 0.0,
+        }
+
+    # For nutrition papers, also require an acceptable design type.
+    if _is_nutrition_paper(topic_scores):
+        if paper.study_type not in NUTRITION_ACCEPTABLE_DESIGNS and paper.study_type != "unknown":
+            return 0.0, {
+                "journal": 0.0,
+                "open_access": 0.0,
+                "topic_match": 0.0,
+                "study_type": 0.0,
+                "novelty": 0.0,
+                "quality_boost": 0.0,
+            }
+
+    journal_tier = classify_journal_tier(paper.journal, config)
     journal_component = {1: 40.0, 2: 26.0, 3: 14.0}[journal_tier]
 
     if paper.open_access_status == "OPEN_ACCESS":
@@ -143,7 +240,9 @@ def score_candidate(paper: CandidatePaper, config: AppConfig, now: date) -> Tupl
     else:
         novelty_component = 4.0
 
-    total = journal_component + oa_component + topic_component + study_component + novelty_component
+    quality_boost = _quality_boost(paper)
+
+    total = journal_component + oa_component + topic_component + study_component + novelty_component + quality_boost
 
     breakdown = {
         "journal": journal_component,
@@ -151,6 +250,7 @@ def score_candidate(paper: CandidatePaper, config: AppConfig, now: date) -> Tupl
         "topic_match": topic_component,
         "study_type": study_component,
         "novelty": novelty_component,
+        "quality_boost": quality_boost,
     }
     return total, breakdown
 

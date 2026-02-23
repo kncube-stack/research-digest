@@ -1,47 +1,53 @@
 {
-  "TIME_WINDOW_DAYS": 7,
+  "TIME_WINDOW_DAYS": 10,
   "TOPICS": [
-    "nutrition",
-    "evolutionary psychology",
+    "personality psychology",
+    "intelligence cognitive abilities",
     "relationship science",
-    "personality science",
-    "psychology of men and boys",
-    "behaviour genetics",
-    "intelligence research"
+    "sex differences",
+    "evolutionary psychology",
+    "social psychology",
+    "weight management body composition",
+    "cardiometabolic outcomes",
+    "dietary patterns foods",
+    "diet lifestyle longitudinal"
   ],
   "JOURNAL_PRIORITIES": {
     "tier1": [
-      "Nature",
-      "Science",
-      "Cell",
+      "The BMJ",
+      "BMJ",
+      "JAMA",
       "The Lancet",
       "New England Journal of Medicine",
-      "JAMA",
-      "BMJ",
-      "PNAS"
+      "Nature Human Behaviour",
+      "Psychological Science",
+      "Journal of Personality and Social Psychology",
+      "Journal of Experimental Psychology: General",
+      "Evolution and Human Behavior"
     ],
     "tier2": [
-      "Nature Medicine",
-      "Nature Metabolism",
-      "Nature Communications",
-      "Science Advances",
-      "Psychological Science",
-      "Perspectives on Psychological Science",
-      "Psychological Bulletin",
-      "Trends in Cognitive Sciences",
-      "Annual Review of Psychology",
-      "Annual Review of Nutrition"
+      "Intelligence",
+      "Personality and Individual Differences",
+      "Journal of Research in Personality",
+      "Social Psychological and Personality Science",
+      "Psychological Methods",
+      "The American Journal of Clinical Nutrition",
+      "The Journal of Nutrition",
+      "Clinical Nutrition",
+      "Circulation",
+      "European Heart Journal",
+      "Diabetes Care",
+      "Diabetologia",
+      "Obesity",
+      "International Journal of Obesity"
     ],
     "tier3": []
   },
   "OPEN_ACCESS_PRIORITY": true,
   "HUMAN_STUDIES_ONLY": true,
-  "SUMMARY_MIN_WORDS": 420,
-  "SUMMARY_MAX_WORDS": 780,
-  "MAX_PAPERS_PER_WEEK": 12,
+  "MAX_PAPERS_PER_WEEK": 14,
   "MIN_PAPERS_PER_TOPIC": 1,
   "EXCLUDE": [
-    "preprints only",
     "conference abstracts",
     "non-peer reviewed"
   ],
@@ -52,11 +58,15 @@
   "PUBMED_TOOL": "research-digest",
   "PUBMED_EMAIL": "",
   "RSS_FEEDS": [
-    {"name": "Nature", "url": "https://www.nature.com/nature.rss"},
-    {"name": "Nature Communications", "url": "https://www.nature.com/ncomms.rss"},
-    {"name": "PNAS", "url": "https://www.pnas.org/rss/current.xml"},
+    {"name": "Psychological Science", "url": "https://journals.sagepub.com/action/showFeed?type=etoc&feed=rss&jc=pssa"},
+    {"name": "Nature Human Behaviour", "url": "https://www.nature.com/nathumbehav.rss"},
+    {"name": "Evolution and Human Behavior", "url": "https://www.sciencedirect.com/journal/evolution-and-human-behavior/rss"},
+    {"name": "Journal of Personality and Social Psychology", "url": "https://www.apa.org/pubs/journals/rss/psp-rss.xml"},
     {"name": "BMJ", "url": "https://www.bmj.com/rss/current.xml"},
     {"name": "JAMA Network Open", "url": "https://jamanetwork.com/rss/site_4/0.xml"},
-    {"name": "Psychological Science", "url": "https://journals.sagepub.com/action/showFeed?type=etoc&feed=rss&jc=pssa"}
+    {"name": "The Lancet", "url": "https://www.thelancet.com/rssfeed/lancet_online.xml"},
+    {"name": "American Journal of Clinical Nutrition", "url": "https://academic.oup.com/rss/site_6122/advanceAccess_6122.xml"},
+    {"name": "Circulation", "url": "https://www.ahajournals.org/action/showFeed?type=etoc&feed=rss&jc=circ"},
+    {"name": "European Heart Journal", "url": "https://academic.oup.com/rss/site_5375/advanceAccess_5375.xml"}
   ]
 }

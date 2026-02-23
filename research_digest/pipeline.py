@@ -8,7 +8,7 @@ from .config import AppConfig
 from .fetchers import SourceFetcher
 from .ranker import select_papers
 from .store import DigestStore
-from .writer import render_post_object
+from .writer import build_end_matter, render_post_object
 
 
 class DigestPipeline:
@@ -61,7 +61,13 @@ class DigestPipeline:
             posts.append(post)
 
         # Strict cap guard.
-        return posts[: self.config.MAX_PAPERS_PER_WEEK]
+        posts = posts[: self.config.MAX_PAPERS_PER_WEEK]
+
+        # Attach weekly end-matter as a final sentinel item.
+        if posts:
+            posts.append({"end_matter": build_end_matter(posts)})
+
+        return posts
 
     def _passes_exclusions(self, paper) -> bool:
         excludes = {item.lower().strip() for item in self.config.EXCLUDE}
